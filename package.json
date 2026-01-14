@@ -1,0 +1,17 @@
+{
+  "name": "neural-interface",
+  "version": "2.1.0",
+  "description": "Retro terminal-style chat interface with n8n webhook integration",
+  "type": "module",
+  "scripts": {
+    "dev": "python3 server.py"
+  },
+  "keywords": [
+    "chat",
+    "terminal",
+    "n8n",
+    "webhook"
+  ],
+  "author": "",
+  "license": "MIT"
+}
