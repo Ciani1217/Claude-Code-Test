@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEURAL INTERFACE v2.1</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #000;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Courier New', Courier, monospace;
+            padding: 20px;
+            overflow: hidden;
+        }
+
+        /* Scanline effect */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            background: repeating-linear-gradient(
+                0deg,
+                rgba(0, 0, 0, 0.15),
+                rgba(0, 0, 0, 0.15) 1px,
+                transparent 1px,
+                transparent 2px
+            );
+            z-index: 1000;
+        }
+
+        /* CRT flicker */
+        @keyframes flicker {
+            0% { opacity: 0.97; }
+            50% { opacity: 1; }
+            100% { opacity: 0.98; }
+        }
+
+        .terminal {
+            width: 100%;
+            max-width: 800px;
+            height: 80vh;
+            max-height: 600px;
+            background: #0a0a0a;
+            border: 1px solid #ff00ff;
+            border-radius: 5px;
+            display: flex;
+            flex-direction: column;
+            box-shadow:
+                0 0 10px rgba(255, 0, 255, 0.3),
+                0 0 20px rgba(255, 0, 255, 0.2),
+                0 0 30px rgba(255, 0, 255, 0.1),
+                inset 0 0 50px rgba(255, 0, 255, 0.05);
+            animation: flicker 0.15s infinite;
+        }
+
+        .terminal-header {
+            background: linear-gradient(180deg, #1a1a1a 0%, #0d0d0d 100%);
+            padding: 10px 15px;
+            border-bottom: 1px solid #ff00ff;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .terminal-btn {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: none;
+        }
+
+        .terminal-btn.red { background: #ff5f56; }
+        .terminal-btn.yellow { background: #ffbd2e; }
+        .terminal-btn.green { background: #27c93f; }
+
+        .terminal-title {
+            color: #ff00ff;
+            font-size: 14px;
+            margin-left: 10px;
+            text-shadow: 0 0 10px rgba(255, 0, 255, 0.7);
+            letter-spacing: 2px;
+        }
+
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .messages::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .messages::-webkit-scrollbar-track {
+            background: #0a0a0a;
+        }
+
+        .messages::-webkit-scrollbar-thumb {
+            background: #ff00ff;
+            border-radius: 4px;
+        }
+
+        .message {
+            color: #ff00ff;
+            font-size: 14px;
+            line-height: 1.6;
+            text-shadow: 0 0 5px rgba(255, 0, 255, 0.5);
+            word-wrap: break-word;
+        }
+
+        .message.user {
+            color: #ff00ff;
+        }
+
+        .message.user::before {
+            content: '> ';
+            color: #ff00ff;
+        }
+
+        .message.bot {
+            color: #cc00cc;
+            padding-left: 20px;
+            border-left: 2px solid #440044;
+        }
+
+        .message.system {
+            color: #880088;
+            font-style: italic;
+        }
+
+        .message.error {
+            color: #ff4444;
+            text-shadow: 0 0 5px rgba(255, 68, 68, 0.5);
+        }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+
+        .cursor {
+            display: inline-block;
+            width: 10px;
+            height: 16px;
+            background: #ff00ff;
+            animation: blink 1s infinite;
+            vertical-align: middle;
+            margin-left: 2px;
+            box-shadow: 0 0 5px rgba(255, 0, 255, 0.7);
+        }
+
+        .typing-indicator {
+            color: #ff00ff;
+        }
+
+        .typing-indicator::after {
+            content: '...';
+            animation: dots 1.5s steps(4, end) infinite;
+        }
+
+        @keyframes dots {
+            0%, 20% { content: ''; }
+            40% { content: '.'; }
+            60% { content: '..'; }
+            80%, 100% { content: '...'; }
+        }
+
+        .input-area {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            border-top: 1px solid #440044;
+            background: #050505;
+        }
+
+        .input-prompt {
+            color: #ff00ff;
+            font-size: 16px;
+            margin-right: 10px;
+            text-shadow: 0 0 10px rgba(255, 0, 255, 0.7);
+        }
+
+        .input-field {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: #ff00ff;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 14px;
+            text-shadow: 0 0 5px rgba(255, 0, 255, 0.5);
+            caret-color: #ff00ff;
+        }
+
+        .input-field::placeholder {
+            color: #440044;
+        }
+
+        .input-field:disabled {
+            opacity: 0.5;
+        }
+
+        .send-btn {
+            background: transparent;
+            border: 1px solid #ff00ff;
+            color: #ff00ff;
+            padding: 8px 15px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-shadow: 0 0 5px rgba(255, 0, 255, 0.5);
+            box-shadow: 0 0 5px rgba(255, 0, 255, 0.3);
+        }
+
+        .send-btn:hover:not(:disabled) {
+            background: #ff00ff;
+            color: #000;
+            box-shadow: 0 0 15px rgba(255, 0, 255, 0.7);
+        }
+
+        .send-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        /* Matrix rain background */
+        .matrix-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            opacity: 0.4;
+            overflow: hidden;
+        }
+
+        @media (max-width: 600px) {
+            .terminal {
+                height: 90vh;
+                max-height: none;
+                border-radius: 0;
+            }
+
+            body {
+                padding: 0;
+            }
+
+            .terminal-title {
+                font-size: 12px;
+            }
+
+            .message {
+                font-size: 13px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="matrix-bg" id="matrixBg"></div>
+
+    <div class="terminal">
+        <div class="terminal-header">
+            <span class="terminal-btn red"></span>
+            <span class="terminal-btn yellow"></span>
+            <span class="terminal-btn green"></span>
+            <span class="terminal-title">NEURAL INTERFACE v2.1</span>
+        </div>
+
+        <div class="messages" id="messages"></div>
+
+        <div class="input-area">
+            <span class="input-prompt">$</span>
+            <input
+                type="text"
+                class="input-field"
+                id="userInput"
+                placeholder="Enter command..."
+                autocomplete="off"
+            >
+            <button class="send-btn" id="sendBtn">TRANSMIT</button>
+        </div>
+    </div>
+
+    <script>
+        // ============================================
+        // CONFIGURATION - Webhook endpoint
+        // For local dev: '/webhook' (uses server.py)
+        // For Vercel: '/api/webhook' (uses serverless function)
+        // ============================================
+        const WEBHOOK_URL = '/api/webhook';
+
+    
+
+        const messagesContainer = document.getElementById('messages');
+        const userInput = document.getElementById('userInput');
+        const sendBtn = document.getElementById('sendBtn');
+
+        let isProcessing = false;
+
+        // Add a message to the chat
+        function addMessage(text, type = 'bot') {
+            const messageEl = document.createElement('div');
+            messageEl.className = `message ${type}`;
+
+            if (type === 'bot') {
+                typeText(messageEl, text);
+            } else {
+                messageEl.textContent = text;
+            }
+
+            messagesContainer.appendChild(messageEl);
+            scrollToBottom();
+            return messageEl;
+        }
+
+        // Typing effect for bot messages
+        function typeText(element, text, speed = 30) {
+            let i = 0;
+            const cursor = document.createElement('span');
+            cursor.className = 'cursor';
+            element.appendChild(cursor);
+
+            function type() {
+                if (i < text.length) {
+                    element.insertBefore(document.createTextNode(text.charAt(i)), cursor);
+                    i++;
+                    scrollToBottom();
+                    setTimeout(type, speed + Math.random() * 20);
+                } else {
+                    cursor.remove();
+                }
+            }
+            type();
+        }
+
+        // Scroll to bottom of messages
+        function scrollToBottom() {
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        // Show loading indicator
+        function showLoading() {
+            const loadingEl = document.createElement('div');
+            loadingEl.className = 'message system typing-indicator';
+            loadingEl.id = 'loadingIndicator';
+            loadingEl.textContent = 'Processing';
+            messagesContainer.appendChild(loadingEl);
+            scrollToBottom();
+        }
+
+        // Remove loading indicator
+        function hideLoading() {
+            const loadingEl = document.getElementById('loadingIndicator');
+            if (loadingEl) loadingEl.remove();
+        }
+
+        // Send message to n8n webhook
+        async function sendMessage(message) {
+            if (!message.trim() || isProcessing) return;
+
+            isProcessing = true;
+            userInput.disabled = true;
+            sendBtn.disabled = true;
+
+            addMessage(message, 'user');
+            userInput.value = '';
+
+            showLoading();
+
+            try {
+                if (WEBHOOK_URL === 'YOUR_N8N_WEBHOOK_URL_HERE') {
+                    throw new Error('Webhook URL not configured. Edit index.html and set WEBHOOK_URL.');
+                }
+
+                const response = await fetch(WEBHOOK_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ message: message })
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`);
+                }
+
+                const contentType = response.headers.get('content-type');
+                let data;
+                
+                if (contentType && contentType.includes('application/json')) {
+                    data = await response.json();
+                } else {
+                    const text = await response.text();
+                    // Try to parse as JSON even if content-type is wrong
+                    try {
+                        data = JSON.parse(text);
+                    } catch {
+                        // If not JSON, use the text as response
+                        data = { message: text };
+                    }
+                }
+                
+                hideLoading();
+
+                // Handle array response from n8n: [{"text": "..."}]
+                let botResponse;
+                if (Array.isArray(data) && data.length > 0) {
+                    botResponse = data[0].text || data[0].message || data[0].response || JSON.stringify(data[0]);
+                } else {
+                    botResponse = data.message || data.response || data.text || JSON.stringify(data);
+                }
+                addMessage(botResponse, 'bot');
+
+            } catch (error) {
+                hideLoading();
+                let errorMsg = error.message;
+                
+                // Provide more helpful error messages
+                if (errorMsg.includes('Failed to fetch') || errorMsg.includes('load failed')) {
+                    errorMsg = 'Network error: Cannot reach webhook. Check:\n1. Webhook URL is correct\n2. CORS is enabled on n8n\n3. Network connection';
+                } else if (errorMsg.includes('CORS')) {
+                    errorMsg = 'CORS error: n8n webhook must allow cross-origin requests';
+                } else if (error.name === 'TypeError') {
+                    errorMsg = `Network error: ${error.message}`;
+                }
+                
+                addMessage(`ERROR: ${errorMsg}`, 'error');
+                console.error('Full error:', error);
+            } finally {
+                isProcessing = false;
+                userInput.disabled = false;
+                sendBtn.disabled = false;
+                userInput.focus();
+            }
+        }
+
+        // Event listeners
+        userInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage(userInput.value);
+            }
+        });
+
+        sendBtn.addEventListener('click', () => {
+            sendMessage(userInput.value);
+        });
+
+        // Boot sequence
+        function bootSequence() {
+            const bootMessages = [
+                { text: 'SYSTEM INITIALIZING...', delay: 0 },
+                { text: 'ESTABLISHING NEURAL LINK...', delay: 800 },
+                { text: 'CONNECTION ESTABLISHED', delay: 1600 },
+                { text: '===============================', delay: 2200 },
+                { text: 'Welcome to the Neural Interface. Type your message below.', delay: 2800 }
+            ];
+
+            bootMessages.forEach(({ text, delay }) => {
+                setTimeout(() => {
+                    addMessage(text, 'system');
+                }, delay);
+            });
+
+            setTimeout(() => {
+                userInput.focus();
+            }, 3000);
+        }
+
+        // Matrix rain effect (subtle background)
+        function createMatrixRain() {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const matrixBg = document.getElementById('matrixBg');
+            matrixBg.appendChild(canvas);
+
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%^&*';
+            const fontSize = 14;
+            const columns = canvas.width / fontSize;
+            const drops = Array(Math.floor(columns)).fill(1);
+
+            function draw() {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                ctx.fillStyle = '#ff00ff';
+                ctx.font = `${fontSize}px monospace`;
+
+                for (let i = 0; i < drops.length; i++) {
+                    const text = chars[Math.floor(Math.random() * chars.length)];
+                    ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+
+                    if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+                        drops[i] = 0;
+                    }
+                    drops[i]++;
+                }
+            }
+
+            setInterval(draw, 50);
+
+            window.addEventListener('resize', () => {
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+            });
+        }
+
+        // Initialize
+        createMatrixRain();
+        bootSequence();
+    </script>
+</body>
+</html>
