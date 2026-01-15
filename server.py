@@ -10,12 +10,15 @@ import os
 
 PORT = 8000
 
-# Get n8n webhook URL from environment variable (for local development)
+# Get n8n webhook URL from environment variable
 # Create a .env file with: N8N_WEBHOOK_URL=https://your-webhook-url
-N8N_WEBHOOK_URL = os.environ.get('N8N_WEBHOOK_URL', 'https://pinkpatoai.app.n8n.cloud/webhook/458bd18a-f719-47fc-a9de-4330b940b179')
+N8N_WEBHOOK_URL = os.environ.get('N8N_WEBHOOK_URL')
 
-if not N8N_WEBHOOK_URL or N8N_WEBHOOK_URL.startswith('https://pinkpatoai'):
-    print("⚠️  WARNING: Using default webhook URL. Set N8N_WEBHOOK_URL environment variable for production.")
+if not N8N_WEBHOOK_URL:
+    print("❌ ERROR: N8N_WEBHOOK_URL environment variable not set!")
+    print("   Create a .env file with: N8N_WEBHOOK_URL=https://your-webhook-url")
+    print("   Or set it: export N8N_WEBHOOK_URL=https://your-webhook-url")
+    exit(1)
 
 
 class ProxyHandler(http.server.SimpleHTTPRequestHandler):
